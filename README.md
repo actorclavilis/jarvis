@@ -13,11 +13,11 @@ The text is processed and a response is formed
 Written in C
 
 Libraries used
- - PortAudio
- - libFLAC
+- PortAudio
+- libFLAC
 
- Developed by 
- NYU-Poly Student Sharan Juangphanich
- Cornell University Student Harrison Houghton
+Developed by 
+Sharan Juangphanich of NYU-Poly
+Harrison Houghton of Cornell University
 
- This project is not affiliated with either University.
+This project is not affiliated with either university.
