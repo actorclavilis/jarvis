@@ -20,8 +20,10 @@ typedef struct
 }
 paData;
 
+void herr(PaError);
+
 static int recordCallback(
-                    const void *inputBuffer, 
+                    const void *inputBuffer,
                     void *outputBuffer,
                     unsigned long framesPerBuffer,
                     const PaStreamCallbackTimeInfo* timeInfo,
@@ -32,14 +34,14 @@ static int recordCallback(
     (void) timeInfo;
     (void) statusFlags;
     (void) userData;
-    
+
     paData *data = (paData*)userData;
 
     const short *rptr = (const short*)inputBuffer;
     short *wptr = &data->recordedSamples[data->frameIndex];
 
     unsigned long framesLeft = data->maxFrameIndex - data->frameIndex;
-    long framesToCalc = framesLeft < framesPerBuffer ? framesLeft : framesPerBuffer; 
+    long framesToCalc = framesLeft < framesPerBuffer ? framesLeft : framesPerBuffer;
 
     if(inputBuffer == NULL)
     {
@@ -64,46 +66,44 @@ static int recordCallback(
 int main(void)
 {
     /*------ INITIALIZE INPUT ------*/
-    
-    PaStreamParameters  inputParameters;
-    PaStream*           stream;
-    paData              data;
-    PaError             err = paNoError;
 
-    data.maxFrameIndex      =   NUM_SECONDS * SAMPLE_RATE;
-    data.frameIndex         =   0;
-    data.recordedSamples    =   (short *) malloc( data.maxFrameIndex * sizeof(double) );
+    PaStreamParameters  inP;
+    PaStream*           str;
+    paData              data;
+
+    {
+        int mfi = NUM_SECONDS * SAMPLE_RATE;
+        data = (paData) {
+            .maxFrameIndex      =   mfi,
+            .frameIndex         =   0,
+            .recordedSamples    =   (short *) calloc( mfi, sizeof(double) ),
+        };
+    }
 
     if(data.recordedSamples == NULL)
     {
         printf("Could not allocate record array.\n");
-        goto done;
+        exit(127);
     }
 
-    for(int i = 0; i < data.maxFrameIndex; i++)
+    atexit((void(*)())Pa_Terminate);
+    herr(Pa_Initialize());
+
+    //Initialize input device
     {
-        data.recordedSamples[i] = 0; //THIS LOOP IS STUPID, FIX LATER
+        PaDeviceIndex dev = Pa_GetDefaultInputDevice();
+        if(dev == paNoDevice)
+        {
+            fprintf(stderr,"Error: No default input device.\n");
+            exit(1);
+        }
+        inP = (PaStreamParameters) {
+            .channelCount                =   1,
+            .sampleFormat                =   PA_SAMPLE_TYPE,
+            .suggestedLatency            =   Pa_GetDeviceInfo(dev)->defaultLowInputLatency,
+            .hostApiSpecificStreamInfo   =   NULL,
+        };
     }
-
-    err = Pa_Initialize();
-
-    if(err != paNoError) 
-    {
-        goto done;
-    }
-
-    inputParameters.device = Pa_GetDefaultInputDevice();
-
-    if(inputParameters.device == paNoDevice) 
-    {
-        fprintf(stderr,"Error: No default input device.\n");
-        goto done;
-    }
-    
-    inputParameters.channelCount                =   1;           
-    inputParameters.sampleFormat                =   PA_SAMPLE_TYPE;
-    inputParameters.suggestedLatency            =   Pa_GetDeviceInfo( inputParameters.device )->defaultLowInputLatency;
-    inputParameters.hostApiSpecificStreamInfo   =   NULL;
 
     /*------ INITIALIZE OUTPUT ------*/
 
@@ -118,75 +118,53 @@ int main(void)
     {
         printf("Not able to open output file %s.\n", "output.wav");
         sf_perror(NULL);
-        goto done;
+        exit(127);
     }
-    
+
     /*------ RECORD ------*/
 
-    err = Pa_OpenStream(
-          &stream,
-          &inputParameters,
-          NULL,                 
+    herr(Pa_OpenStream(
+          &str,
+          &inP,
+          NULL,
           SAMPLE_RATE,
           FRAMES_PER_BUFFER,
-          paClipOff,    
+          paClipOff,
           recordCallback,
-          &data);
+          &data));
 
-    if(err != paNoError) 
-    {
-        goto done;
-    }
+    herr(Pa_StartStream(str));
 
-    err = Pa_StartStream(stream);
-    
-    if(err != paNoError)
-    {
-        goto done;
-    }
-
-    printf("\n=== Now recording!! Please speak into the microphone. ===\n"); 
+    printf("\n=== Now recording!! Please speak into the microphone. ===\n");
     fflush(stdout);
-    
-    while((err = Pa_IsStreamActive(stream)) == 1)
+
+    PaError e;
+    while((e = Pa_IsStreamActive(str)) == 1)
     {
         Pa_Sleep(1000);
         printf("Index = %d\n", data.frameIndex);
         fflush(stdout);
     }
+    herr(e);
 
-    sf_write_short(outfile, data.recordedSamples, data.maxFrameIndex); 
+    sf_write_short(outfile, data.recordedSamples, data.maxFrameIndex);
 
-    if(err < 0) 
-    {
-        goto done;
-    }
-
-    err = Pa_CloseStream(stream);
-    
-    if(err != paNoError) 
-    {
-        goto done;
-    }
+    herr(Pa_CloseStream(str));
 
     sf_close(outfile);
 
-done:    
-    Pa_Terminate();
-    
-    if(data.recordedSamples)
-    {
-        free(data.recordedSamples);
-    }
-    
-    if(err != paNoError)
-    {
-        fprintf( stderr, "An error occured while using the portaudio stream\n" );
-        fprintf( stderr, "Error number: %d\n", err );
-        fprintf( stderr, "Error message: %s\n", Pa_GetErrorText( err ) );
-        err = 1;      
-    }
-    
-    return err;
+    free(data.recordedSamples);
+
+    return 0;
 }
 
+
+inline void herr(PaError e) {
+    if(e != paNoError)
+    {
+        fprintf( stderr, "An error occured while using the portaudio stream\n" );
+        fprintf( stderr, "Error number: %d\n", e );
+        fprintf( stderr, "Error message: %s\n", Pa_GetErrorText( e ) );
+        exit(e);
+    }
+}
