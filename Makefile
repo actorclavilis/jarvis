@@ -11,7 +11,7 @@ TARGET	=	Jarvis
 CC		=	gcc
 CFLAGS	=	-std=c99 -g -Wall
 LDFLAGS	=
-LIBS	=	-lportaudio
+LIBS	=	-lportaudio -lsndfile
 
 BINDIR	=	bin
 INCDIR	=	include
