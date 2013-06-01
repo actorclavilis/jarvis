@@ -71,14 +71,12 @@ int main(void)
     PaStream*           str;
     paData              data;
 
+    data = (paData) 
     {
-        int mfi = NUM_SECONDS * SAMPLE_RATE;
-        data = (paData) {
-            .maxFrameIndex      =   mfi,
-            .frameIndex         =   0,
-            .recordedSamples    =   (short *) calloc( mfi, sizeof(double) ),
-        };
-    }
+        .maxFrameIndex      =   NUM_SECONDS * SAMPLE_RATE,
+        .frameIndex         =   0,
+        .recordedSamples    =   (short *)calloc(NUM_SECONDS * SAMPLE_RATE, sizeof(short)),
+    };
 
     if(data.recordedSamples == NULL)
     {
@@ -89,21 +87,21 @@ int main(void)
     atexit((void(*)())Pa_Terminate);
     herr(Pa_Initialize());
 
-    //Initialize input device
+    PaDeviceIndex dev = Pa_GetDefaultInputDevice();
+
+    if(dev == paNoDevice)
     {
-        PaDeviceIndex dev = Pa_GetDefaultInputDevice();
-        if(dev == paNoDevice)
-        {
-            fprintf(stderr,"Error: No default input device.\n");
-            exit(1);
-        }
-        inP = (PaStreamParameters) {
-            .channelCount                =   1,
-            .sampleFormat                =   PA_SAMPLE_TYPE,
-            .suggestedLatency            =   Pa_GetDeviceInfo(dev)->defaultLowInputLatency,
-            .hostApiSpecificStreamInfo   =   NULL,
-        };
+        fprintf(stderr,"Error: No default input device.\n");
+        exit(1);
     }
+
+    inP = (PaStreamParameters) 
+    {
+        .channelCount                =   1,
+        .sampleFormat                =   PA_SAMPLE_TYPE,
+        .suggestedLatency            =   Pa_GetDeviceInfo(dev)->defaultLowInputLatency,
+        .hostApiSpecificStreamInfo   =   NULL,
+    };
 
     /*------ INITIALIZE OUTPUT ------*/
 
@@ -112,11 +110,11 @@ int main(void)
 
     sfinfo.samplerate   =   SAMPLE_RATE;
     sfinfo.channels     =   1;
-    sfinfo.format       =   SF_FORMAT_WAV | SF_FORMAT_PCM_16;
+    sfinfo.format       =   SF_FORMAT_FLAC | SF_FORMAT_PCM_16;
 
-    if(!(outfile = sf_open("output.wav", SFM_WRITE, &sfinfo)))
+    if(!(outfile = sf_open("output.flac", SFM_WRITE, &sfinfo)))
     {
-        printf("Not able to open output file %s.\n", "output.wav");
+        printf("Not able to open output file %s.\n", "output.flac");
         sf_perror(NULL);
         exit(127);
     }
@@ -159,7 +157,8 @@ int main(void)
 }
 
 
-inline void herr(PaError e) {
+inline void herr(PaError e) 
+{
     if(e != paNoError)
     {
         fprintf( stderr, "An error occured while using the portaudio stream\n" );
